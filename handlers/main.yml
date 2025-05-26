@@ -1,8 +1,8 @@
 ---
 # handlers file for role_technitium
 
-- name: restart dns
+- name: restart technitium
   ansible.builtin.systemd:
-    name: dns
+    name: "{{ technitium_service_name }}"
     daemon_reload: true
     state: restarted
