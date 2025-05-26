@@ -1,2 +1,85 @@
 ---
 # tasks file for role_technitium
+
+- name: Create technitium directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ technitium_dns_config }}"
+    - "{{ technitium_dns_dir }}"
+    - "{{ technitium_dotnet_dir }}"
+
+- name: Check if ASP.NET Core Runtime is installed
+  ansible.builtin.command:
+    cmd: dotnet --list-runtimes
+  register: dotnet_runtimes
+  failed_when: false
+  changed_when: false
+
+- name: Download .NET install script
+  ansible.builtin.get_url:
+    url: "{{ technitium_dotnet_url }}"
+    dest: "{{ technitium_temp_dir }}/dotnet-install.sh"
+    mode: '0755'
+  when: technitium_dotnet_runtime not in dotnet_runtimes.stdout
+
+- name: Install ASP.NET Core Runtime
+  ansible.builtin.command:
+    cmd: "{{ technitium_temp_dir }}/dotnet-install.sh --channel {{ technitium_dotnet_version }} --runtime aspnetcore --install-dir {{ technitium_dotnet_dir }}"
+  when: technitium_dotnet_runtime not in dotnet_runtimes.stdout
+  become: true
+
+- name: Create dotnet symlink
+  ansible.builtin.file:
+    src: "{{ technitium_dotnet_dir }}/dotnet"
+    dest: "/usr/local/bin/dotnet"
+    state: link
+  when: technitium_dotnet_runtime not in dotnet_runtimes.stdout
+
+- name: Add dotnet to PATH
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    line: 'PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:{{ technitium_dotnet_dir }}"'
+    regexp: '^PATH='
+    backup: true
+  when: technitium_dotnet_runtime not in dotnet_runtimes.stdout
+
+- name: Check if Technitium DNS Server is already installed
+  ansible.builtin.stat:
+    path: "{{ technitium_dns_dir }}/start.sh"
+  register: technitium_installed
+
+- name: Stop DNS service if running (for upgrade)
+  ansible.builtin.systemd:
+    name: "{{ technitium_service_name }}"
+    state: stopped
+  when: technitium_installed.stat.exists
+  failed_when: false
+
+- name: Download Technitium DNS Server
+  ansible.builtin.get_url:
+    url: "{{ technitium_dns_url }}"
+    dest: "{{ technitium_temp_dir }}/DnsServerPortable.tar.gz"
+    mode: '0644'
+
+- name: Extract Technitium DNS Server
+  ansible.builtin.unarchive:
+    src: "{{ technitium_temp_dir }}/DnsServerPortable.tar.gz"
+    dest: "{{ technitium_dns_dir }}"
+    remote_src: true
+    owner: root
+    group: root
+
+- name: create version marker file
+  ansible.builtin.template:
+    src: systemd.service.j2
+    dest: /etc/systemd/system/{{ technitium_service_name }}.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - restart dns

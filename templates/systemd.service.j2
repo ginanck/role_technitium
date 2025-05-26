@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Technitium DNS Server
+
+[Service]
+WorkingDirectory={{ technitium_dns_dir }}
+ExecStart={{ technitium_dotnet_dir }}/dotnet {{ technitium_dns_dir }}/DnsServerApp.dll {{ technitium_dns_config }}
+Restart=always
+# Restart service after 10 seconds if the dotnet service crashes:
+RestartSec=10
+KillSignal=SIGINT
+SyslogIdentifier=dns-server
+
+[Install]
+WantedBy=multi-user.target

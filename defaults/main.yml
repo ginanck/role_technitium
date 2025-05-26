@@ -1,2 +1,16 @@
 ---
 # defaults file for role_technitium
+
+technitium_dotnet_dir: "/opt/dotnet"
+technitium_dotnet_version: "8.0"
+technitium_dotnet_runtime: "Microsoft.AspNetCore.App 8.0."
+technitium_dotnet_url: "https://dot.net/v1/dotnet-install.sh"
+
+technitium_dns_config: /etc/dns
+technitium_dns_dir: /opt/technitium/dns
+technitium_dns_url: "https://download.technitium.com/dns/DnsServerPortable.tar.gz"
+
+technitium_install_log: "{{ technitium_dns_dir }}/install.log"
+technitium_service_name: "dns"
+technitium_web_port: 5380
+technitium_temp_dir: "/tmp"
