@@ -1,6 +1,8 @@
 ---
 # defaults file for role_technitium
 
+# Documentation: https://blog.technitium.com/2017/11/running-dns-server-on-ubuntu-linux.html
+
 technitium_dotnet_dir: "/opt/dotnet"
 technitium_dotnet_version: "8.0"
 technitium_dotnet_runtime: "Microsoft.AspNetCore.App 8.0."
