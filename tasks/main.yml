@@ -23,13 +23,13 @@
 - name: Download .NET install script
   ansible.builtin.get_url:
     url: "{{ technitium_dotnet_url }}"
-    dest: "{{ technitium_temp_dir }}/dotnet-install.sh"
+    dest: "{{ technitium_dns_dir }}/dotnet-install.sh"
     mode: '0755'
   when: technitium_dotnet_runtime not in dotnet_runtimes.stdout
 
 - name: Install ASP.NET Core Runtime
   ansible.builtin.command:
-    cmd: "{{ technitium_temp_dir }}/dotnet-install.sh --channel {{ technitium_dotnet_version }} --runtime aspnetcore --install-dir {{ technitium_dotnet_dir }}"
+    cmd: "{{ technitium_dns_dir }}/dotnet-install.sh --channel {{ technitium_dotnet_version }} --runtime aspnetcore --install-dir {{ technitium_dotnet_dir }}"
   when: technitium_dotnet_runtime not in dotnet_runtimes.stdout
   become: true
 
@@ -51,12 +51,12 @@
 - name: Download Technitium DNS Server
   ansible.builtin.get_url:
     url: "{{ technitium_dns_url }}"
-    dest: "{{ technitium_temp_dir }}/DnsServerPortable.tar.gz"
+    dest: "{{ technitium_dns_dir }}/DnsServerPortable.tar.gz"
     mode: '0644'
 
 - name: Extract Technitium DNS Server
   ansible.builtin.unarchive:
-    src: "{{ technitium_temp_dir }}/DnsServerPortable.tar.gz"
+    src: "{{ technitium_dns_dir }}/DnsServerPortable.tar.gz"
     dest: "{{ technitium_dns_dir }}"
     remote_src: true
     owner: root

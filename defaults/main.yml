@@ -15,7 +15,6 @@ technitium_dns_url: "https://download.technitium.com/dns/DnsServerPortable.tar.g
 technitium_install_log: "{{ technitium_dns_dir }}/install.log"
 technitium_service_name: "technitium"
 technitium_web_port: 5380
-technitium_temp_dir: "/tmp"
 
 technitium_nameservers:
   - "127.0.0.1"
