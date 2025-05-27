@@ -62,6 +62,14 @@
     owner: root
     group: root
 
+- name: Update resolv.conf
+  ansible.builtin.template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: '0644'
+
 - name: Create systemd file for technitium
   ansible.builtin.template:
     src: systemd.service.j2

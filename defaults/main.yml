@@ -17,7 +17,7 @@ technitium_service_name: "technitium"
 technitium_web_port: 5380
 
 technitium_nameservers:
-  - "127.0.0.1"
+  - "127.0.0.53"
 
 technitium_search_domains:
   - "."
