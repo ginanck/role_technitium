@@ -74,7 +74,7 @@
     owner: root
     group: root
 
-- name: create version marker file
+- name: Create systemd file for technitium
   ansible.builtin.template:
     src: systemd.service.j2
     dest: /etc/systemd/system/{{ technitium_service_name }}.service
@@ -83,3 +83,30 @@
     mode: '0644'
   notify:
     - restart technitium
+
+- name: Check if systemd-resolved is running
+  ansible.builtin.systemd:
+    name: systemd-resolved
+  register: systemd_resolved_status
+
+- name: Stop and disable systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: stopped
+    enabled: false
+
+- name: Create new resolv.conf from template
+  ansible.builtin.template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+
+- name: Enable and start Technitium DNS Server
+  ansible.builtin.systemd:
+    name: "{{ technitium_service_name }}"
+    enabled: true
+    daemon_reload: true
+    state: started
