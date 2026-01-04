@@ -69,6 +69,8 @@
     owner: root
     group: root
     mode: '0644'
+  tags:
+    - notest
 
 - name: Create systemd file for technitium
   ansible.builtin.template:
