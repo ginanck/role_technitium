@@ -32,6 +32,7 @@ provisioner:
         base_resolv_conf_managed: false
   playbooks:
     converge: ../resources/converge.yml
+    prepare: ../resources/prepare.yml
 verifier:
   name: ansible
   options:
