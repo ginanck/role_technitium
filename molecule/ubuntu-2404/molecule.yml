@@ -29,6 +29,7 @@ provisioner:
       technitium-ubuntu-2404:
         ansible_user: root
         base_hostname: "technitium-ubuntu-2404"
+        base_resolv_conf_managed: false
   playbooks:
     converge: ../resources/converge.yml
 verifier:

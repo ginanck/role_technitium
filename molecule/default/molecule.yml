@@ -29,6 +29,7 @@ provisioner:
       technitium-almalinux-8:
         ansible_user: root
         base_hostname: "technitium-almalinux-8"
+        base_resolv_conf_managed: false
   playbooks:
     converge: ../resources/converge.yml
 verifier:
