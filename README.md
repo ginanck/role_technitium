@@ -80,29 +80,31 @@ ansible-galaxy install -r meta/install_requirements.yml
 
 ## Role Variables
 
+**These are static variables with lower priority**
 
 
-### File: `defaults/main.yml`
 
-| Variable | Default Value | Description |
-|----------|---------------|-------------|
-| `technitium_dotnet_dir` | `/opt/dotnet` | None |
-| `technitium_dotnet_version` | `9.0` | None |
-| `technitium_dotnet_runtime` | `Microsoft.AspNetCore.App 9.0.` | None |
-| `technitium_dotnet_url` | `https://dot.net/v1/dotnet-install.sh` | None |
-| `technitium_dns_config` | `/etc/dns` | None |
-| `technitium_dns_dir` | `/opt/technitium/dns` | None |
-| `technitium_dns_url` | `https://download.technitium.com/dns/DnsServerPortable.tar.gz` | None |
-| `technitium_install_log` | `{{ technitium_dns_dir }}/install.log` | None |
-| `technitium_service_name` | `technitium` | None |
-| `technitium_web_port` | `5380` | None |
-| `technitium_nameservers` | `[]` | None |
-| `technitium_nameservers.0` | `127.0.0.53` | None |
-| `technitium_search_domains` | `[]` | None |
-| `technitium_search_domains.0` | `.` | None |
-| `technitium_resolv_options` | `[]` | None |
-| `technitium_resolv_options.0` | `edns0` | None |
-| `technitium_resolv_options.1` | `trust-ad` | None |
+#### File: defaults/main.yml
+
+| Var | Type | Value |
+|-----|------|-------|
+| [technitium_dns_config](defaults/main.yml#L11) | str | `/etc/dns` |
+| [technitium_dns_dir](defaults/main.yml#L12) | str | `/opt/technitium/dns` |
+| [technitium_dns_url](defaults/main.yml#L13) | str | `https://download.technitium.com/dns/DnsServerPortable.tar.gz` |
+| [technitium_dotnet_dir](defaults/main.yml#L6) | str | `/opt/dotnet` |
+| [technitium_dotnet_runtime](defaults/main.yml#L8) | str | `Microsoft.AspNetCore.App 9.0.` |
+| [technitium_dotnet_url](defaults/main.yml#L9) | str | `https://dot.net/v1/dotnet-install.sh` |
+| [technitium_dotnet_version](defaults/main.yml#L7) | str | `9.0` |
+| [technitium_install_log](defaults/main.yml#L15) | str | `{{ technitium_dns_dir }}/install.log` |
+| [technitium_nameservers](defaults/main.yml#L19) | list |  |
+| [technitium_nameservers.0](defaults/main.yml#L20) | str | `127.0.0.53` |
+| [technitium_resolv_options](defaults/main.yml#L25) | list |  |
+| [technitium_resolv_options.0](defaults/main.yml#L26) | str | `edns0` |
+| [technitium_resolv_options.1](defaults/main.yml#L27) | str | `trust-ad` |
+| [technitium_search_domains](defaults/main.yml#L22) | list |  |
+| [technitium_search_domains.0](defaults/main.yml#L23) | str | `.` |
+| [technitium_service_name](defaults/main.yml#L16) | str | `technitium` |
+| [technitium_web_port](defaults/main.yml#L17) | int | `5380` |
 
 
 
@@ -113,19 +115,22 @@ ansible-galaxy install -r meta/install_requirements.yml
 This role performs the following tasks:
 
 
-### `main.yml`
+### File: `tasks/main.yml`
+
+| Task Name | Module | Has Conditions | Line |
+|-----------|--------|----------------|------|
+| [Create technitium directories](tasks/main.yml#L) | ansible.builtin.file | No | N/A |
+| [Check if ASP.NET Core Runtime is installed](tasks/main.yml#L) | ansible.builtin.command | No | N/A |
+| [Download .NET install script](tasks/main.yml#L) | ansible.builtin.get_url | Yes | N/A |
+| [Install ASP.NET Core Runtime](tasks/main.yml#L) | ansible.builtin.command | Yes | N/A |
+| [Create dotnet symlink](tasks/main.yml#L) | ansible.builtin.file | Yes | N/A |
+| [Add dotnet to PATH](tasks/main.yml#L) | ansible.builtin.lineinfile | Yes | N/A |
+| [Download Technitium DNS Server](tasks/main.yml#L) | ansible.builtin.get_url | No | N/A |
+| [Extract Technitium DNS Server](tasks/main.yml#L) | ansible.builtin.unarchive | No | N/A |
+| [Update resolv.conf](tasks/main.yml#L) | ansible.builtin.template | No | N/A |
+| [Create systemd file for technitium](tasks/main.yml#L) | ansible.builtin.template | No | N/A |
 
 
-- **Create technitium directories**
-- **Check if ASP.NET Core Runtime is installed**
-- **Download .NET install script**
-- **Install ASP.NET Core Runtime**
-- **Create dotnet symlink**
-- **Add dotnet to PATH**
-- **Download Technitium DNS Server**
-- **Extract Technitium DNS Server**
-- **Update resolv.conf**
-- **Create systemd file for technitium**
 
 
 
@@ -145,41 +150,6 @@ This role performs the following tasks:
         technitium_dotnet_runtime: Microsoft.AspNetCore.App 9.0.
 
 ```
-
-## Documentation Maintenance
-
-### Updating Dependencies
-
-1. **Update** `meta/main.yml`:
-   ```yaml
-   documented_requirements:
-     - src: https://github.com/user/role.git
-       version: master
-     - name: collection.name
-       version: 1.0.0
-   ```
-
-2. **Sync** `meta/install_requirements.yml` with the same requirements
-
-3. **Regenerate** documentation:
-   ```bash
-   pre-commit run --all-files
-   ```
-
-### Template Updates
-
-- Edit `.docsible_template.md` for structure changes
-- Test with: `docsible --role . --md-template .docsible_template.md -nob -com -tl`
-- Commit both template and generated README.md
-
-### Quick Checklist
-
-When updating dependencies:
-- [ ] Add to `meta/main.yml` → `documented_requirements`
-- [ ] Add to `meta/install_requirements.yml`
-- [ ] Run `pre-commit run --all-files`
-- [ ] Verify generated README.md
-- [ ] Commit all changes
 
 ## License
 
