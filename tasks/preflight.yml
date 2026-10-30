@@ -1,0 +1,42 @@
+---
+# Fail fast before anything is changed on the host.
+
+- name: Assert the admin password is supplied by the vault
+  ansible.builtin.assert:
+    that:
+      - technitium_admin_password | default('') | length > 0
+    fail_msg: >-
+      technitium_admin_password is required. Provide the Technitium admin
+      password from the vault; this role ships no default admin password.
+    quiet: true
+
+- name: Assert the vault password is not the factory password
+  ansible.builtin.assert:
+    that:
+      - technitium_admin_password != technitium_default_admin_password
+    fail_msg: >-
+      technitium_admin_password must differ from the factory password
+      (technitium_default_admin_password); otherwise the default credentials
+      would remain valid.
+    quiet: true
+
+- name: Assert the pinned runtime version matches the required runtime
+  ansible.builtin.assert:
+    that:
+      - technitium_dotnet_runtime is search('Microsoft\.AspNetCore\.App\s+' ~ (technitium_dotnet_version | regex_escape))
+    fail_msg: >-
+      technitium_dotnet_runtime ({{ technitium_dotnet_runtime }}) does not
+      match technitium_dotnet_version ({{ technitium_dotnet_version }}).
+      Technitium 15.x requires the ASP.NET Core 10 runtime.
+    quiet: true
+
+- name: Assert the DNS and console ports are valid and distinct
+  ansible.builtin.assert:
+    that:
+      - technitium_dns_port | int > 0
+      - technitium_dns_port | int < 65536
+      - technitium_console_port | int > 0
+      - technitium_console_port | int < 65536
+      - technitium_dns_port | int != technitium_console_port | int
+    fail_msg: "technitium_dns_port and technitium_console_port must be distinct valid ports"
+    quiet: true

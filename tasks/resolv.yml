@@ -1,0 +1,22 @@
+---
+
+- name: Check the resolver configuration path
+  ansible.builtin.stat:
+    path: /etc/resolv.conf
+    follow: false
+  register: technitium_resolv_conf_stat
+
+- name: Remove a symlinked /etc/resolv.conf
+  ansible.builtin.file:
+    path: /etc/resolv.conf
+    state: absent
+  when: technitium_resolv_conf_stat.stat.islnk | default(false)
+
+- name: Point the host resolver at the local Technitium instance
+  ansible.builtin.template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: '0644'
+    unsafe_writes: true

@@ -2,5 +2,8 @@
 - name: Converge
   hosts: all
   become: true
+  vars:
+    # Test fixture only: the role requires a vault supplied admin password.
+    technitium_admin_password: "molecule-admin-secret"
   roles:
     - role: role_technitium

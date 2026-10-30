@@ -1,0 +1,8 @@
+---
+# Runtime dependencies for the .NET ASP.NET Core runtime on the Debian family.
+
+- name: Install the .NET runtime dependencies
+  ansible.builtin.apt:
+    name: "{{ technitium_os_packages }}"
+    state: present
+    update_cache: true

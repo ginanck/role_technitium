@@ -1,0 +1,64 @@
+---
+# Migration of the built-in admin account to the vault password. The API
+# authenticates with the vault password when it is already in place, which is
+# what makes a re-run idempotent.
+
+- name: Wait for the Technitium web console
+  ansible.builtin.uri:
+    url: "{{ technitium_api_base_url }}/api/status"
+    method: GET
+    status_code: 200
+  register: technitium_api_status
+  until: technitium_api_status.status | default(0) == 200
+  retries: 60
+  delay: 2
+  changed_when: false
+
+- name: Check whether the vault admin password already authenticates
+  ansible.builtin.uri:
+    url: >-
+      {{ technitium_api_base_url }}/api/user/login?user={{ technitium_admin_user | urlencode }}&pass={{ technitium_admin_password | urlencode }}
+    method: GET
+    status_code: 200
+  register: technitium_vault_login
+  failed_when: false
+  changed_when: false
+  no_log: true
+
+- name: Authenticate with the factory admin password
+  ansible.builtin.uri:
+    url: >-
+      {{ technitium_api_base_url }}/api/user/login?user={{ technitium_admin_user | urlencode }}&pass={{ technitium_default_admin_password | urlencode }}
+    method: GET
+    status_code: 200
+  register: technitium_default_login
+  failed_when: false
+  changed_when: false
+  no_log: true
+  when: technitium_vault_login.json.status | default('') != 'ok'
+
+- name: Set the admin password from the vault
+  ansible.builtin.uri:
+    url: >-
+      {{ technitium_api_base_url }}/api/user/changePassword?pass={{ technitium_default_admin_password | urlencode }}&newPass={{ technitium_admin_password | urlencode }}
+    method: GET
+    status_code: 200
+    headers:
+      Authorization: "Bearer {{ technitium_default_login.json.token | default('') }}"
+  register: technitium_password_change
+  changed_when: true
+  no_log: true
+  when:
+    - technitium_vault_login.json.status | default('') != 'ok'
+    - technitium_default_login.json.status | default('') == 'ok'
+
+- name: Assert the admin password is the vault password
+  ansible.builtin.assert:
+    that:
+      - technitium_vault_login.json.status | default('') == 'ok' or
+        technitium_password_change.json.status | default('') == 'ok'
+    fail_msg: >-
+      The admin password could not be set to the vault password. Neither the
+      vault password nor the factory password authenticated against
+      {{ technitium_api_base_url }}.
+    quiet: true

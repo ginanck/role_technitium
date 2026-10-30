@@ -1,78 +1,89 @@
 ---
 # tasks file for role_technitium
 
-- name: Create technitium directories
+- name: Check installed packages
+  ansible.builtin.package_facts:
+    manager: auto
+  when: ansible_facts.packages is not defined
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
+- name: Run pre-flight checks
+  ansible.builtin.include_tasks: preflight.yml
+
+- name: Install OS family packages
+  ansible.builtin.include_tasks: "os_family/{{ ansible_os_family }}.yml"
+
+# ----------------------------------------------------------------
+# Service account and directories
+# ----------------------------------------------------------------
+
+- name: Create the Technitium service group
+  ansible.builtin.group:
+    name: "{{ technitium_service_group }}"
+    system: true
+
+- name: Create the Technitium service account
+  ansible.builtin.user:
+    name: "{{ technitium_service_user }}"
+    group: "{{ technitium_service_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ technitium_service_home }}"
+    create_home: false
+    comment: "Technitium DNS Server"
+
+- name: Create the Technitium configuration directory
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ technitium_dns_config }}"
+    state: directory
+    owner: "{{ technitium_service_user }}"
+    group: "{{ technitium_service_group }}"
+    mode: '0750'
+
+- name: Create the Technitium installation directory
+  ansible.builtin.file:
+    path: "{{ technitium_dns_dir }}"
+    state: directory
+    owner: "{{ technitium_service_user }}"
+    group: "{{ technitium_service_group }}"
+    mode: '0755'
+
+- name: Create the .NET installation directory
+  ansible.builtin.file:
+    path: "{{ technitium_dotnet_dir }}"
     state: directory
     owner: root
     group: root
     mode: '0755'
-  loop:
-    - "{{ technitium_dns_config }}"
-    - "{{ technitium_dns_dir }}"
-    - "{{ technitium_dotnet_dir }}"
 
-- name: Check if ASP.NET Core Runtime is installed
-  ansible.builtin.command:
-    cmd: dotnet --list-runtimes
-  register: dotnet_runtimes
-  failed_when: false
-  changed_when: false
+# ----------------------------------------------------------------
+# Port 53 ownership
+# ----------------------------------------------------------------
 
-- name: Download .NET install script
-  ansible.builtin.get_url:
-    url: "{{ technitium_dotnet_url }}"
-    dest: "{{ technitium_dns_dir }}/dotnet-install.sh"
-    mode: '0755'
-  when: technitium_dotnet_runtime not in dotnet_runtimes.stdout
+- name: Disable the systemd-resolved stub listener
+  ansible.builtin.include_tasks: systemd_resolved.yml
+  when: technitium_disable_systemd_resolved_stub | bool
 
-- name: Install ASP.NET Core Runtime
-  ansible.builtin.command:
-    cmd: "{{ technitium_dns_dir }}/dotnet-install.sh --channel {{ technitium_dotnet_version }} --runtime aspnetcore --install-dir {{ technitium_dotnet_dir }}"
-  when: technitium_dotnet_runtime not in dotnet_runtimes.stdout
-  become: true
+- name: Guard the DNS port
+  ansible.builtin.include_tasks: port.yml
 
-- name: Create dotnet symlink
-  ansible.builtin.file:
-    src: "{{ technitium_dotnet_dir }}/dotnet"
-    dest: "/usr/local/bin/dotnet"
-    state: link
-  when: technitium_dotnet_runtime not in dotnet_runtimes.stdout
+# ----------------------------------------------------------------
+# Runtime and release
+# ----------------------------------------------------------------
 
-- name: Add dotnet to PATH
-  ansible.builtin.lineinfile:
-    path: /etc/environment
-    line: 'PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:{{ technitium_dotnet_dir }}"'
-    regexp: '^PATH='
-    backup: true
-  when: technitium_dotnet_runtime not in dotnet_runtimes.stdout
+- name: Install the required .NET runtime
+  ansible.builtin.include_tasks: runtime.yml
 
-- name: Download Technitium DNS Server
-  ansible.builtin.get_url:
-    url: "{{ technitium_dns_url }}"
-    dest: "{{ technitium_dns_dir }}/DnsServerPortable.tar.gz"
-    mode: '0644'
+- name: Install the pinned Technitium release
+  ansible.builtin.include_tasks: install.yml
 
-- name: Extract Technitium DNS Server
-  ansible.builtin.unarchive:
-    src: "{{ technitium_dns_dir }}/DnsServerPortable.tar.gz"
-    dest: "{{ technitium_dns_dir }}"
-    remote_src: true
-    owner: root
-    group: root
+# ----------------------------------------------------------------
+# Service
+# ----------------------------------------------------------------
 
-- name: Update resolv.conf
-  ansible.builtin.template:
-    src: resolv.conf.j2
-    dest: /etc/resolv.conf
-    owner: root
-    group: root
-    mode: '0644'
-  tags:
-    - notest
-
-- name: Create systemd file for technitium
+- name: Create the systemd unit for Technitium
   ansible.builtin.template:
     src: systemd.service.j2
     dest: /etc/systemd/system/{{ technitium_service_name }}.service
@@ -81,3 +92,25 @@
     mode: '0644'
   notify:
     - restart technitium
+
+- name: Enable and start the Technitium service
+  ansible.builtin.systemd:
+    name: "{{ technitium_service_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Set the admin credentials from the vault
+  ansible.builtin.include_tasks: admin.yml
+
+# ----------------------------------------------------------------
+# Host resolution and firewall
+# ----------------------------------------------------------------
+
+- name: Point the host resolver at Technitium
+  ansible.builtin.include_tasks: resolv.yml
+  when: technitium_resolv_conf_managed | bool
+
+- name: Manage the firewall
+  ansible.builtin.include_tasks: firewall.yml
+  when: technitium_firewall_manage | bool

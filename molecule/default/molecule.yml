@@ -9,7 +9,7 @@ dependency:
 driver:
   name: docker
 platforms:
-  - name: default
+  - name: technitium-default
     image: ghcr.io/ginanck/molecule-rockylinux:8-latest
     pre_build_image: true
     privileged: true
@@ -28,7 +28,7 @@ provisioner:
     ANSIBLE_COLLECTIONS_PATH: ${MOLECULE_PROJECT_DIRECTORY}/dependency/collections
   inventory:
     host_vars:
-      default:
+      technitium-default:
         ansible_user: root
         base_hostname: "default"
   playbooks:

@@ -4,3 +4,29 @@
   become: true
   roles:
     - role_base
+  tasks:
+    - name: Ensure procps-ng is present for process assertions
+      ansible.builtin.package:
+        name: procps-ng
+        state: present
+      when: ansible_os_family == 'RedHat'
+
+    - name: Ensure procps is present for process assertions
+      ansible.builtin.package:
+        name: procps
+        state: present
+      when: ansible_os_family == 'Debian'
+
+    - name: Check for a listener on the DNS port before converge
+      ansible.builtin.command:
+        cmd: ss -lntuH
+      register: technitium_prepare_sockets
+      changed_when: false
+      failed_when: false
+
+    - name: Report a pre-existing DNS port listener
+      ansible.builtin.debug:
+        msg: >-
+          Something already listens on port 53 before converge:
+          {{ technitium_prepare_sockets.stdout_lines | select('search', ':53(\s|$)') | list }}
+      when: technitium_prepare_sockets.stdout is search(':53(\s|$)')

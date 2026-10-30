@@ -9,7 +9,7 @@ dependency:
 driver:
   name: docker
 platforms:
-  - name: rockylinux-9
+  - name: technitium-rockylinux-9
     image: ghcr.io/ginanck/molecule-rockylinux:9-latest
     pre_build_image: true
     privileged: true
@@ -28,7 +28,7 @@ provisioner:
     ANSIBLE_COLLECTIONS_PATH: ${MOLECULE_PROJECT_DIRECTORY}/dependency/collections
   inventory:
     host_vars:
-      rockylinux-9:
+      technitium-rockylinux-9:
         ansible_user: root
         base_hostname: "rockylinux-9"
   playbooks:

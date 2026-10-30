@@ -7,3 +7,10 @@
     state: restarted
     daemon_reload: true
     enabled: true
+
+- name: restart systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted
+    daemon_reload: true
+  when: ansible_facts.services['systemd-resolved.service'].state | default('inactive') == 'running'

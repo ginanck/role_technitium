@@ -1,0 +1,28 @@
+---
+# Guard the DNS port before the service is (re)started. On a re-run the
+# resolver itself owns the port, so the check only runs while it is inactive.
+
+- name: Record whether the Technitium service is running
+  ansible.builtin.set_fact:
+    technitium_service_running: >-
+      {{ (ansible_facts.services[technitium_service_name ~ '.service'].state | default('inactive')) == 'running' }}
+
+- name: Collect listening sockets
+  ansible.builtin.command:
+    cmd: ss -lntuH
+  register: technitium_listening_sockets
+  changed_when: false
+  failed_when: false
+
+- name: Assert the DNS port is free for Technitium
+  ansible.builtin.assert:
+    that:
+      - technitium_listening_sockets.stdout is not search(':' ~ (technitium_dns_port | int) ~ '(\s|$)')
+    fail_msg: >-
+      Port {{ technitium_dns_port }} is already in use and Technitium is not
+      running. Free the port (for example by disabling another stub resolver)
+      before applying this role.
+    quiet: true
+  when:
+    - not technitium_service_running | bool
+    - technitium_listening_sockets is succeeded

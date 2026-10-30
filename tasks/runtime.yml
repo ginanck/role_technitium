@@ -1,0 +1,56 @@
+---
+# Install the ASP.NET Core runtime major version required by the pinned
+# Technitium release. Detection uses the absolute dotnet path so a re-run does
+# not depend on the login PATH.
+
+- name: Check the installed .NET runtimes
+  ansible.builtin.command:
+    cmd: "{{ technitium_dotnet_dir }}/dotnet --list-runtimes"
+  register: technitium_dotnet_runtimes
+  changed_when: false
+  failed_when: false
+
+- name: Download the .NET install script
+  ansible.builtin.get_url:
+    url: "{{ technitium_dotnet_url }}"
+    dest: "{{ technitium_dotnet_install_script }}"
+    owner: root
+    group: root
+    mode: '0755'
+    checksum: "{{ technitium_dotnet_install_script_checksum if technitium_dotnet_install_script_checksum else omit }}"
+  when: technitium_dotnet_runtime not in (technitium_dotnet_runtimes.stdout | default(''))
+
+- name: Install the ASP.NET Core runtime
+  ansible.builtin.command:
+    cmd: >-
+      {{ technitium_dotnet_install_script }}
+      --channel {{ technitium_dotnet_version }}
+      --runtime aspnetcore
+      --install-dir {{ technitium_dotnet_dir }}
+      --no-path
+  changed_when: true
+  when: technitium_dotnet_runtime not in (technitium_dotnet_runtimes.stdout | default(''))
+
+- name: Link dotnet into the system path
+  ansible.builtin.file:
+    src: "{{ technitium_dotnet_dir }}/dotnet"
+    dest: /usr/local/bin/dotnet
+    state: link
+    force: true
+  when: technitium_dotnet_runtime not in (technitium_dotnet_runtimes.stdout | default(''))
+
+- name: Read the installed .NET runtimes after installation
+  ansible.builtin.command:
+    cmd: "{{ technitium_dotnet_dir }}/dotnet --list-runtimes"
+  register: technitium_dotnet_runtimes_installed
+  changed_when: false
+
+- name: Assert the required ASP.NET Core runtime is installed
+  ansible.builtin.assert:
+    that:
+      - technitium_dotnet_runtime in technitium_dotnet_runtimes_installed.stdout
+    fail_msg: >-
+      The required runtime {{ technitium_dotnet_runtime }} is missing from
+      {{ technitium_dotnet_dir }}. Install .NET {{ technitium_dotnet_version }}
+      or allow outbound access to the .NET download service.
+    quiet: true

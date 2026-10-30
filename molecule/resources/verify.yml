@@ -1,8 +1,227 @@
 ---
 - name: Verify
   hosts: all
-  gather_facts: false
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../../defaults/main.yml
+  vars:
+    # Test fixture only: the same value used by converge.
+    technitium_admin_password: "molecule-admin-secret"
   tasks:
-    - name: Example assertion
+    # ----------------------------------------------------------------
+    # AC-1: the resolver binds port 53
+    # ----------------------------------------------------------------
+    - name: test_ac1_collect_listening_sockets
+      ansible.builtin.command:
+        cmd: ss -lntuH
+      register: technitium_sockets
+      changed_when: false
+
+    - name: test_ac1_assert_dns_port_is_bound
       ansible.builtin.assert:
-        that: true
+        that:
+          - technitium_sockets.stdout is search(':' ~ (technitium_dns_port | int) ~ '(\s|$)')
+        fail_msg: "Technitium must bind the DNS port {{ technitium_dns_port }}"
+
+    - name: test_ac1_query_the_resolver_on_port_53
+      ansible.builtin.command:
+        cmd: dig +time=2 +tries=1 +norecurse @127.0.0.1 . NS
+      register: technitium_dig
+      changed_when: false
+      failed_when: false
+
+    - name: test_ac1_assert_resolver_answers
+      ansible.builtin.assert:
+        that:
+          - technitium_dig.rc == 0
+          - "'status:' in technitium_dig.stdout"
+        fail_msg: "the resolver did not answer a query on port 53"
+
+    # ----------------------------------------------------------------
+    # AC-2: the required runtime is installed and the service is active
+    # ----------------------------------------------------------------
+    - name: test_ac2_read_installed_dotnet_runtimes
+      ansible.builtin.command:
+        cmd: "{{ technitium_dotnet_dir }}/dotnet --list-runtimes"
+      register: technitium_verify_runtimes
+      changed_when: false
+
+    - name: test_ac2_assert_required_runtime_is_installed
+      ansible.builtin.assert:
+        that:
+          - technitium_dotnet_runtime in technitium_verify_runtimes.stdout
+        fail_msg: "the pinned release requires {{ technitium_dotnet_runtime }}"
+
+    - name: test_ac2_read_service_state
+      ansible.builtin.command:
+        cmd: systemctl is-active {{ technitium_service_name }}.service
+      register: technitium_verify_active
+      changed_when: false
+      failed_when: false
+
+    - name: test_ac2_read_service_enabled_state
+      ansible.builtin.command:
+        cmd: systemctl is-enabled {{ technitium_service_name }}.service
+      register: technitium_verify_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: test_ac2_assert_service_is_enabled_and_running
+      ansible.builtin.assert:
+        that:
+          - technitium_verify_active.stdout | trim == 'active'
+          - technitium_verify_enabled.stdout | trim == 'enabled'
+        fail_msg: "the Technitium service must be enabled and running"
+
+    # ----------------------------------------------------------------
+    # AC-3: the version marker prevents re-extraction (molecule also
+    # asserts zero changed tasks in the idempotence stage)
+    # ----------------------------------------------------------------
+    - name: test_ac3_read_release_version_marker
+      ansible.builtin.slurp:
+        src: "{{ technitium_version_marker }}"
+      register: technitium_verify_marker
+
+    - name: test_ac3_assert_version_marker_matches_pinned_release
+      ansible.builtin.assert:
+        that:
+          - technitium_verify_marker.content | b64decode | trim == technitium_version
+        fail_msg: "the version marker must record the pinned release {{ technitium_version }}"
+
+    # ----------------------------------------------------------------
+    # AC-4: a missing vault password fails the run and names the variable
+    # ----------------------------------------------------------------
+    - name: test_ac4_run_preflight_without_admin_password
+      block:
+        - name: test_ac4_include_preflight_without_password
+          ansible.builtin.include_role:
+            name: role_technitium
+            tasks_from: preflight.yml
+          vars:
+            technitium_admin_password: ""
+      rescue:
+        - name: test_ac4_record_expected_failure
+          ansible.builtin.set_fact:
+            technitium_ac4_missing_password_failed: true
+
+    - name: test_ac4_assert_missing_password_is_rejected
+      ansible.builtin.assert:
+        that:
+          - technitium_ac4_missing_password_failed | default(false)
+        fail_msg: "the role must stop when technitium_admin_password is missing"
+
+    # ----------------------------------------------------------------
+    # AC-5: only the vault password authenticates
+    # ----------------------------------------------------------------
+    - name: test_ac5_login_with_the_vault_password
+      ansible.builtin.uri:
+        url: >-
+          {{ technitium_api_base_url }}/api/user/login?user={{ technitium_admin_user | urlencode }}&pass={{ technitium_admin_password | urlencode }}
+        method: GET
+        status_code: 200
+      register: technitium_verify_vault_login
+      changed_when: false
+      no_log: true
+
+    - name: test_ac5_assert_vault_password_authenticates
+      ansible.builtin.assert:
+        that:
+          - technitium_verify_vault_login.json.status | default('') == 'ok'
+        fail_msg: "the vault admin password must authenticate"
+        quiet: true
+
+    - name: test_ac5_login_with_the_factory_password
+      ansible.builtin.uri:
+        url: >-
+          {{ technitium_api_base_url }}/api/user/login?user={{ technitium_admin_user | urlencode }}&pass={{ technitium_default_admin_password | urlencode }}
+        method: GET
+        status_code: 200
+      register: technitium_verify_default_login
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: test_ac5_assert_factory_password_is_rejected
+      ansible.builtin.assert:
+        that:
+          - technitium_verify_default_login.json.status | default('') != 'ok'
+        fail_msg: "the factory admin password must no longer authenticate"
+        quiet: true
+
+    - name: test_ac5_read_console_status
+      ansible.builtin.uri:
+        url: "{{ technitium_api_base_url }}/api/status"
+        method: GET
+        status_code: 200
+      register: technitium_verify_status
+      changed_when: false
+
+    - name: test_ac5_assert_no_default_credentials_remain
+      ansible.builtin.assert:
+        that:
+          - technitium_verify_status.json.hasDefaultCredentials | default(true) | bool == false
+        fail_msg: "the console still reports default credentials"
+
+    # ----------------------------------------------------------------
+    # AC-6: dedicated account, hardening and bind capability
+    # ----------------------------------------------------------------
+    - name: test_ac6_read_the_systemd_unit
+      ansible.builtin.slurp:
+        src: /etc/systemd/system/{{ technitium_service_name }}.service
+      register: technitium_verify_unit
+
+    - name: test_ac6_assert_unit_runs_as_dedicated_user
+      ansible.builtin.assert:
+        that:
+          - (('User=' ~ technitium_service_user) in (technitium_verify_unit.content | b64decode))
+          - ('User=root' not in (technitium_verify_unit.content | b64decode))
+        fail_msg: "the unit must run as {{ technitium_service_user }}, not root"
+
+    - name: test_ac6_assert_unit_hardening_directives
+      ansible.builtin.assert:
+        that:
+          - ("NoNewPrivileges=true" in (technitium_verify_unit.content | b64decode))
+          - ("ProtectSystem=strict" in (technitium_verify_unit.content | b64decode))
+          - ("PrivateTmp=true" in (technitium_verify_unit.content | b64decode))
+          - ("RestrictAddressFamilies=" in (technitium_verify_unit.content | b64decode))
+        fail_msg: "the unit must carry hardening directives"
+
+    - name: test_ac6_assert_bind_capability
+      ansible.builtin.assert:
+        that:
+          - ("CapabilityBoundingSet=CAP_NET_BIND_SERVICE" in (technitium_verify_unit.content | b64decode))
+          - ("AmbientCapabilities=CAP_NET_BIND_SERVICE" in (technitium_verify_unit.content | b64decode))
+        fail_msg: "the unit must grant only CAP_NET_BIND_SERVICE"
+
+    - name: test_ac6_read_the_service_main_pid
+      ansible.builtin.command:
+        cmd: systemctl show -p MainPID --value {{ technitium_service_name }}.service
+      register: technitium_verify_main_pid
+      changed_when: false
+
+    - name: test_ac6_read_the_service_process_user
+      ansible.builtin.command:
+        cmd: ps -o user= -p {{ technitium_verify_main_pid.stdout | trim }}
+      register: technitium_verify_process_user
+      changed_when: false
+      failed_when: false
+
+    - name: test_ac6_assert_service_runs_as_the_dedicated_account
+      ansible.builtin.assert:
+        that:
+          - technitium_verify_main_pid.stdout | trim != '0'
+          - technitium_verify_process_user.stdout | trim == technitium_service_user
+        fail_msg: "the running resolver must use the {{ technitium_service_user }} account"
+
+    - name: test_ac6_read_the_service_account
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ technitium_service_user }}"
+
+    - name: test_ac6_assert_service_account_is_unprivileged
+      ansible.builtin.assert:
+        that:
+          - technitium_service_user in ansible_facts.getent_passwd
+          - ansible_facts.getent_passwd[technitium_service_user][1] | int != 0
+        fail_msg: "{{ technitium_service_user }} must exist and must not be root"

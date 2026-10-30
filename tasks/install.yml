@@ -1,0 +1,64 @@
+---
+# The portable archive is extracted only when the pinned release differs from
+# the version marker. This keeps re-runs free of downloads and extraction.
+
+- name: Check the installed release version marker
+  ansible.builtin.stat:
+    path: "{{ technitium_version_marker }}"
+  register: technitium_version_marker_stat
+
+- name: Read the installed release version marker
+  ansible.builtin.slurp:
+    src: "{{ technitium_version_marker }}"
+  register: technitium_version_marker_content
+  when: technitium_version_marker_stat.stat.exists
+
+- name: Record the installed release version
+  ansible.builtin.set_fact:
+    technitium_installed_version: >-
+      {{ (technitium_version_marker_content.content | b64decode | trim)
+         if (technitium_version_marker_stat.stat.exists and technitium_version_marker_content is not skipped)
+         else '' }}
+    technitium_release_install_required: >-
+      {{ ((technitium_version_marker_content.content | b64decode | trim)
+          if (technitium_version_marker_stat.stat.exists and technitium_version_marker_content is not skipped)
+          else '') != technitium_version }}
+
+- name: Stop the resolver before replacing its release
+  ansible.builtin.systemd:
+    name: "{{ technitium_service_name }}"
+    state: stopped
+  when:
+    - technitium_release_install_required | bool
+    - technitium_service_running | bool
+
+- name: Download the Technitium DNS Server release
+  ansible.builtin.get_url:
+    url: "{{ technitium_dns_url }}"
+    dest: "{{ technitium_dns_dir }}/DnsServerPortable.tar.gz"
+    owner: root
+    group: root
+    mode: '0640'
+    checksum: "{{ technitium_dns_checksum if technitium_dns_checksum else omit }}"
+    force: true
+  when: technitium_release_install_required | bool
+
+- name: Extract the Technitium DNS Server release
+  ansible.builtin.unarchive:
+    src: "{{ technitium_dns_dir }}/DnsServerPortable.tar.gz"
+    dest: "{{ technitium_dns_dir }}"
+    remote_src: true
+    owner: "{{ technitium_service_user }}"
+    group: "{{ technitium_service_group }}"
+  when: technitium_release_install_required | bool
+  notify:
+    - restart technitium
+
+- name: Record the installed release version
+  ansible.builtin.copy:
+    content: "{{ technitium_version }}\n"
+    dest: "{{ technitium_version_marker }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: technitium_release_install_required | bool

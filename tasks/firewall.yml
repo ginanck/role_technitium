@@ -1,0 +1,24 @@
+---
+# Open the resolver ports in the host firewall. The role is a no-op when the
+# firewall is not running (for example when role_base disables it).
+
+- name: Open the resolver ports in firewalld
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ technitium_firewall_ports }}"
+  when:
+    - ansible_os_family == 'RedHat'
+    - ansible_facts.services['firewalld.service'].state | default('inactive') == 'running'
+
+- name: Allow the resolver ports through ufw
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.split('/')[0] }}"
+    proto: "{{ item.split('/')[1] }}"
+  loop: "{{ technitium_firewall_ports }}"
+  when:
+    - ansible_os_family == 'Debian'
+    - ansible_facts.services['ufw.service'].state | default('inactive') == 'running'

@@ -1,2 +1,7 @@
 ---
 # vars file for role_technitium
+
+# Native libraries and utilities the .NET runtime needs. libicu is mandatory:
+# without it .NET fails with "Couldn't find a valid ICU package installed".
+# findutils is required by the dotnet-install script.
+technitium_os_packages: "{{ ['libicu', 'openssl-libs', 'findutils', 'tar', 'gzip'] if ansible_facts['os_family'] == 'RedHat' else ['libicu-dev', 'ca-certificates', 'findutils', 'tar', 'gzip'] }}"

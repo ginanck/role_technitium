@@ -3,25 +3,82 @@
 
 # Documentation: https://blog.technitium.com/2017/11/running-dns-server-on-ubuntu-linux.html
 
-technitium_dotnet_dir: "/opt/dotnet"
-technitium_dotnet_version: "9.0"
-technitium_dotnet_runtime: "Microsoft.AspNetCore.App 9.0."
-technitium_dotnet_url: "https://dot.net/v1/dotnet-install.sh"
+# ================================================================
+# RELEASE PINNING
+# ================================================================
+# Pinned application release. The version marker written by the role
+# prevents the archive from being extracted again while this value is
+# unchanged.
+technitium_version: "15.6.2"
+technitium_dns_url: "https://download.technitium.com/dns/DnsServerPortable.tar.gz"
+# Optional sha256 checksum for the portable archive ("<hash>" or "sha256:<hash>").
+technitium_dns_checksum: ""
 
+# ================================================================
+# .NET RUNTIME
+# ================================================================
+# Major version required by the pinned release (Technitium 15.x is built
+# for net10.0 and needs the ASP.NET Core 10 runtime).
+technitium_dotnet_version: "10.0"
+technitium_dotnet_runtime: "Microsoft.AspNetCore.App 10.0."
+technitium_dotnet_dir: "/opt/dotnet"
+technitium_dotnet_url: "https://dot.net/v1/dotnet-install.sh"
+technitium_dotnet_install_script: "{{ technitium_dns_dir }}/dotnet-install.sh"
+technitium_dotnet_install_script_checksum: ""
+
+# ================================================================
+# PATHS
+# ================================================================
 technitium_dns_config: /etc/dns
 technitium_dns_dir: /opt/technitium/dns
-technitium_dns_url: "https://download.technitium.com/dns/DnsServerPortable.tar.gz"
+technitium_version_marker: "{{ technitium_dns_config }}/technitium.version"
 
-technitium_install_log: "{{ technitium_dns_dir }}/install.log"
+# ================================================================
+# SERVICE
+# ================================================================
 technitium_service_name: "technitium"
-technitium_web_port: 5380
+technitium_service_user: "technitium"
+technitium_service_group: "technitium"
+technitium_service_home: "{{ technitium_dns_dir }}"
 
+# ================================================================
+# NETWORK
+# ================================================================
+technitium_dns_port: 53
+technitium_console_port: 5380
+# Backwards compatible alias for the console port.
+technitium_web_port: "{{ technitium_console_port }}"
+technitium_api_address: "127.0.0.1"
+technitium_api_base_url: "http://{{ technitium_api_address }}:{{ technitium_console_port }}"
+
+# Free port 53 by disabling the systemd-resolved stub listener. The
+# drop-in lives in /etc so package updates cannot re-enable the stub.
+technitium_disable_systemd_resolved_stub: true
+
+# Point the host resolver at the local Technitium instance.
+technitium_resolv_conf_managed: true
 technitium_nameservers:
-  - "127.0.0.53"
-
+  - "127.0.0.1"
 technitium_search_domains:
   - "."
-
 technitium_resolv_options:
   - "edns0"
   - "trust-ad"
+
+# ================================================================
+# ADMIN CONSOLE CREDENTIALS
+# ================================================================
+technitium_admin_user: "admin"
+# Required. Set it from the vault; the role ships no default password.
+technitium_admin_password: ""
+# Factory password of the built-in account. It is used only to migrate the
+# account to the vault password and is never left in place.
+technitium_default_admin_password: "admin"
+
+# ================================================================
+# FIREWALL
+# ================================================================
+technitium_firewall_manage: true
+technitium_firewall_ports:
+  - "53/tcp"
+  - "53/udp"

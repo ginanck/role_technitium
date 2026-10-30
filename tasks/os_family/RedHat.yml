@@ -1,0 +1,9 @@
+---
+# Runtime dependencies for the .NET ASP.NET Core runtime on the RedHat family.
+# libicu is required by .NET globalization; without it the resolver exits
+# immediately on first start.
+
+- name: Install the .NET runtime dependencies
+  ansible.builtin.dnf:
+    name: "{{ technitium_os_packages }}"
+    state: present

@@ -1,0 +1,42 @@
+---
+# systemd-resolved keeps a stub listener on 127.0.0.53:53. Technitium needs
+# port 53, so the stub listener is disabled. The drop-in is placed in /etc,
+# which systemd prefers over vendor drop-ins, so a package update of
+# systemd-resolved cannot re-enable the stub listener.
+
+- name: Check for the systemd-resolved unit
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /usr/lib/systemd/system/systemd-resolved.service
+    - /lib/systemd/system/systemd-resolved.service
+  register: technitium_resolved_unit
+
+- name: Record whether systemd-resolved is present
+  ansible.builtin.set_fact:
+    technitium_systemd_resolved_present: >-
+      {{ technitium_resolved_unit.results | selectattr('stat.exists') | list | length > 0 }}
+
+- name: Create the systemd-resolved drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: technitium_systemd_resolved_present | bool
+
+- name: Disable the systemd-resolved stub listener on port 53
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/90-technitium-no-stub.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      # Managed by Ansible. Technitium DNS Server owns port 53; the stub
+      # listener must not bind it.
+      [Resolve]
+      DNSStubListener=no
+  when: technitium_systemd_resolved_present | bool
+  notify:
+    - restart systemd-resolved
